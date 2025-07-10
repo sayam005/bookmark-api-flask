@@ -1,14 +1,7 @@
 from flask import Flask
-from flask_restx import Api
-from flask_sqlalchemy import SQLAlchemy
-from flask_migrate import Migrate
-from flask_jwt_extended import JWTManager
+from flasgger import Swagger
 from config import config_by_name
-
-# Initialize extensions
-db = SQLAlchemy()
-migrate = Migrate()
-jwt = JWTManager()
+from extensions import db, migrate, jwt
 
 def create_app(config_name='development'):
     """Application factory"""
@@ -20,18 +13,47 @@ def create_app(config_name='development'):
     migrate.init_app(app, db)
     jwt.init_app(app)
 
-    api = Api(app,
-              title='Bookmarks API',
-              version='1.0',
-              description='A simple bookmarks API with user authentication',
-              doc='/docs')
-
-    # Import and register blueprints/namespaces here
-    from blueprints.auth import auth_ns
-    # from blueprints.bookmarks import bookmarks_ns
+    # Initialize Swagger UI with Flasgger
+    swagger_config = {
+        "headers": [],
+        "specs": [
+            {
+                "endpoint": 'apispec',
+                "route": '/apispec.json',
+                "rule_filter": lambda rule: True,
+                "model_filter": lambda tag: True,
+            }
+        ],
+        "static_url_path": "/flasgger_static",
+        "swagger_ui": True,
+        "specs_route": "/docs/"
+    }
     
-    api.add_namespace(auth_ns, path='/auth')
-    # api.add_namespace(bookmarks_ns, path='/bookmarks')
+    template = {
+        "swagger": "2.0",
+        "info": {
+            "title": "Bookmarks API",
+            "description": "A simple bookmarks API with user authentication",
+            "version": "1.0"
+        },
+        "securityDefinitions": {
+            "Bearer": {
+                "type": "apiKey",
+                "name": "Authorization",
+                "in": "header",
+                "description": "JWT Authorization header using the Bearer scheme. Example: \"Authorization: Bearer {token}\""
+            }
+        },
+    }
+
+    swagger = Swagger(app, config=swagger_config, template=template)
+
+    # Import and register blueprints
+    from blueprints.auth import auth_bp
+    from blueprints.bookmarks import bookmarks_bp
+    
+    app.register_blueprint(auth_bp, url_prefix='/auth')
+    app.register_blueprint(bookmarks_bp, url_prefix='/bookmarks')
 
     # Import models to ensure they are registered with SQLAlchemy
     from models import User, Bookmark
