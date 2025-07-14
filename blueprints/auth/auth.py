@@ -134,21 +134,11 @@ def login():
               type: string
     """
     data = request.get_json()
-    
-    if not data:
-        return jsonify({'message': 'No JSON data provided'}), 400
-    
-    username = data.get('username')
-    password = data.get('password')
-    
-    if not all([username, password]):
-        return jsonify({'message': 'Username and password are required'}), 400
-    
-    user = User.query.filter_by(username=username).first()
+    user = User.query.filter_by(username=data.get('username')).first()
 
-    if user and user.check_password(password):
-        access_token = create_access_token(identity=user.id)
-        refresh_token = create_refresh_token(identity=user.id)
+    if user and user.check_password(data.get('password')):
+        access_token = create_access_token(identity=str(user.id))
+        refresh_token = create_refresh_token(identity=str(user.id))
         return jsonify({
             'message': 'Logged in successfully',
             'access_token': access_token,
