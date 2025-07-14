@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import Category, User, category_collaborators
+from models import Category, User, category_collaborators, Bookmark
 from extensions import db
 from sqlalchemy.exc import IntegrityError
 
@@ -634,7 +634,7 @@ def get_shared_category(share_token):
     if not category:
         return jsonify({'message': 'Invalid share token'}), 404
 
-    # Get all bookmarks in this category
+    # Get all bookmarks in this category - FIXED: use category_bookmarks
     bookmarks = []
     for bookmark in category.bookmarks:
         bookmarks.append({
@@ -783,7 +783,7 @@ def get_public_category(category_id):
         category_collaborators.c.role == 'owner'
     ).first()
 
-    # Get all bookmarks in this category
+    # Get all bookmarks in this category - FIXED: use category_bookmarks
     bookmarks = []
     for bookmark in category.bookmarks:
         bookmarks.append({

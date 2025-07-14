@@ -45,7 +45,7 @@ class Category(db.Model):
                                     back_populates='shared_categories', lazy='dynamic')
     
     # Relationship to bookmarks in this category
-    category_bookmarks = db.relationship('Bookmark', backref='category', lazy=True, cascade="all, delete-orphan")
+    bookmarks = db.relationship('Bookmark', backref='category', lazy=True, cascade="all, delete-orphan")
 
     def generate_share_token(self):
         if not self.share_token:
