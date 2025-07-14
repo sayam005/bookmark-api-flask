@@ -52,10 +52,12 @@ def create_app(config_name='development'):
     from blueprints.auth import auth_bp
     from blueprints.bookmarks import bookmarks_bp
     from blueprints.categories import category_bp
+    from blueprints.quotes import quotes_bp
     
     app.register_blueprint(auth_bp, url_prefix='/auth')
     app.register_blueprint(bookmarks_bp, url_prefix='/bookmarks')
     app.register_blueprint(category_bp, url_prefix='/categories')
+    app.register_blueprint(quotes_bp, url_prefix='/quotes')
 
     # Import models to ensure they are registered with SQLAlchemy
     from models import User, Bookmark, Category
