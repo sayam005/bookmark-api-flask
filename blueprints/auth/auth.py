@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token, create_refresh_token
+from flask_jwt_extended import jwt_required, get_jwt_identity, create_access_token, create_refresh_token, get_jwt
 from models import User
-from extensions import db
+from config import db
 from sqlalchemy.exc import IntegrityError
 
 auth_bp = Blueprint('auth', __name__)
@@ -206,3 +206,45 @@ def manage_user():
         db.session.delete(user)
         db.session.commit()
         return '', 204
+
+@auth_bp.route('/logout', methods=['POST'])
+@jwt_required()
+def logout():
+    """Logout user
+    ---
+    tags:
+      - Authentication
+    security:
+      - Bearer: []
+    responses:
+      200:
+        description: Successfully logged out
+        schema:
+          type: object
+          properties:
+            message:
+              type: string
+              example: "Successfully logged out"
+      400:
+        description: Bad request
+        schema:
+          type: object
+          properties:
+            msg:
+              type: string
+              example: "Bad Request"
+      401:
+        description: Invalid or missing token
+        schema:
+          type: object
+          properties:
+            msg:
+              type: string
+              example: "Missing Authorization Header"
+    """
+    try:
+        # Simple logout - just return success message
+        # In a simple setup, we rely on frontend to discard the token
+        return jsonify({'message': 'Successfully logged out'}), 200
+    except Exception as e:
+        return jsonify({'message': 'Logout failed', 'error': str(e)}), 400

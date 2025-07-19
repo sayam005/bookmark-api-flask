@@ -1,7 +1,6 @@
 from flask import Flask
 from flasgger import Swagger
-from config import config_by_name
-from extensions import db, migrate, jwt
+from config import config_by_name, db, migrate, jwt
 
 def create_app(config_name='development'):
     """Application factory"""

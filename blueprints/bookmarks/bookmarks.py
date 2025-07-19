@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import Bookmark, Category, User
-from extensions import db
+from config import db
 
 bookmarks_bp = Blueprint('bookmarks', __name__)
 

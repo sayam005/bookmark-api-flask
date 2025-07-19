@@ -1,12 +1,13 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from models import Category, User, category_collaborators, Bookmark
-from extensions import db
+from config import db
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import func
 
 category_bp = Blueprint('categories', __name__)
 
-# Helper function to check if a user is the owner of a category
+# This helper function is correct and matches your models.
 def is_owner(user_id, category):
     conn = db.engine.connect()
     query = db.select(category_collaborators.c.role).where(
@@ -59,6 +60,7 @@ def create_category():
     current_user_id = get_jwt_identity()
     user = User.query.get(current_user_id)
 
+    # FIXED QUERY: This now correctly checks for ownership using the collaborators table.
     existing_category = Category.query.join(category_collaborators).filter(
         category_collaborators.c.user_id == current_user_id,
         category_collaborators.c.role == 'owner',
@@ -68,15 +70,22 @@ def create_category():
     if existing_category:
         return jsonify({'message': 'You already have a category with this name'}), 409
 
-    new_category = Category(name=name, is_public=is_public)
+    # THE FIX: You must provide the user_id when creating the Category
+    # because your database requires it.
+    new_category = Category(name=name, is_public=is_public, user_id=current_user_id)
+    
+    # This part is still correct for setting up the relationship.
     new_category.collaborators.append(user)
     
     db.session.add(new_category)
-    db.session.commit()
+    db.session.flush()
 
+    # This correctly sets the creator's role to 'owner'.
     stmt = db.update(category_collaborators).where(
-        category_collaborators.c.user_id == current_user_id,
-        category_collaborators.c.category_id == new_category.id
+        db.and_(
+            category_collaborators.c.user_id == current_user_id,
+            category_collaborators.c.category_id == new_category.id
+        )
     ).values(role='owner')
     db.session.execute(stmt)
     db.session.commit()
@@ -188,6 +197,7 @@ def update_category(category_id):
     new_name = data.get('name')
 
     if new_name:
+        # FIXED QUERY: Checks for ownership using the collaborators table.
         existing_category = Category.query.join(category_collaborators).filter(
             category_collaborators.c.user_id == current_user_id,
             category_collaborators.c.role == 'owner',
@@ -481,8 +491,11 @@ def update_collaborator_role(category_id, user_id):
     if new_role not in ['owner', 'editor']:
         return jsonify({'message': 'Invalid role. Must be "owner" or "editor"'}), 400
 
-    # If making someone else owner, demote current owner to editor
+    # If making someone else owner, demote current owner to editor AND TRANSFER OWNERSHIP
     if new_role == 'owner' and user_id != current_user_id:
+        # CRUCIAL FIX: Update the main owner of the category
+        category.user_id = user_id
+
         # Update current owner to editor
         stmt_current = db.update(category_collaborators).where(
             category_collaborators.c.user_id == current_user_id,
@@ -679,20 +692,15 @@ def get_public_categories():
       200:
         description: A list of public categories.
     """
-    from sqlalchemy import func
-    
     # Build the optimized query that gets everything in one go
+    # SIMPLIFIED QUERY: Joins on the direct user_id for ownership
     query = db.session.query(
         Category.id,
         Category.name,
         User.username.label('owner_username'),
         func.count(Bookmark.id).label('bookmark_count')
     ).select_from(Category)\
-    .join(category_collaborators, Category.id == category_collaborators.c.category_id)\
-    .join(User, db.and_(
-        category_collaborators.c.user_id == User.id,
-        category_collaborators.c.role == 'owner'
-    ))\
+    .join(User, Category.user_id == User.id)\
     .outerjoin(Bookmark, Category.id == Bookmark.category_id)\
     .filter(Category.is_public == True)\
     .group_by(Category.id, Category.name, User.username)
@@ -777,13 +785,11 @@ def get_public_category(category_id):
     if not category:
         return jsonify({'message': 'Public category not found'}), 404
 
-    # Get the owner
-    owner_query = db.session.query(User).join(category_collaborators).filter(
-        category_collaborators.c.category_id == category.id,
-        category_collaborators.c.role == 'owner'
-    ).first()
+    # Get the owner using the direct relationship
+    # SIMPLIFIED: No complex query needed
+    owner_username = category.owner.username if category.owner else 'Unknown'
 
-    # Get all bookmarks in this category - FIXED: use category_bookmarks
+    # Get all bookmarks in this category
     bookmarks = []
     for bookmark in category.bookmarks:
         bookmarks.append({
@@ -799,5 +805,5 @@ def get_public_category(category_id):
         'name': category.name,
         'is_public': category.is_public,
         'bookmarks': bookmarks,
-        'owner': owner_query.username if owner_query else 'Unknown'
+        'owner': owner_username
     }), 200

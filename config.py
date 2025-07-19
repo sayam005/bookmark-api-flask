@@ -1,8 +1,16 @@
 import os
 from dotenv import load_dotenv
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
+from flask_jwt_extended import JWTManager
 
 # Load environment variables from .env file
 load_dotenv()
+
+# Initialize extensions
+db = SQLAlchemy()
+migrate = Migrate()
+jwt = JWTManager()
 
 class Config:
     """Base configuration."""
