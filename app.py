@@ -1,6 +1,6 @@
 from flask import Flask
 from flasgger import Swagger
-from config import config_by_name, db, migrate, jwt
+from config import config_by_name, db, migrate, jwt, mail
 
 def create_app(config_name='development'):
     """Application factory"""
@@ -11,6 +11,7 @@ def create_app(config_name='development'):
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
+    mail.init_app(app)
 
     # Initialize Swagger UI with Flasgger
     swagger_config = {

@@ -4,6 +4,7 @@ from models import Category, User, category_collaborators, Bookmark
 from config import db
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import func
+from utils.smtp import send_collaborator_invitation_email
 
 category_bp = Blueprint('categories', __name__)
 
@@ -252,7 +253,7 @@ def delete_category(category_id):
 @category_bp.route('/<int:category_id>/collaborators', methods=['POST'])
 @jwt_required()
 def add_collaborator(category_id):
-    """Add a collaborator to a category. Only the owner can do this.
+    """Add a collaborator to a category.
     ---
     tags:
       - categories
@@ -273,13 +274,22 @@ def add_collaborator(category_id):
             email:
               type: string
               description: The email of the user to add as a collaborator.
+            role:
+              type: string
+              enum: [editor, reader]
+              default: editor
+              description: The role to assign to the collaborator.
     responses:
-      201:
+      200:
         description: Collaborator added successfully.
+      400:
+        description: Bad request (e.g., email is missing, invalid role).
       403:
         description: Forbidden, only the owner can add collaborators.
       404:
-        description: Category or user to add not found.
+        description: Category or user not found.
+      409:
+        description: User is already a collaborator.
     """
     current_user_id = get_jwt_identity()
     category = Category.query.get(category_id)
@@ -287,20 +297,59 @@ def add_collaborator(category_id):
     if not category:
         return jsonify({'message': 'Category not found'}), 404
 
+    # Only the owner can add collaborators
     if not is_owner(current_user_id, category):
         return jsonify({'message': 'Forbidden: Only the owner can add collaborators'}), 403
 
     data = request.get_json()
-    email_to_add = data.get('email')
-    user_to_add = User.query.filter_by(email=email_to_add).first()
+    collaborator_email = data.get('email')
+    role = data.get('role', 'editor')
 
-    if not user_to_add:
-        return jsonify({'message': f'User with email {email_to_add} not found'}), 404
+    if not collaborator_email:
+        return jsonify({'message': 'Collaborator email is required'}), 400
+    
+    if role not in ['editor', 'reader']:
+        return jsonify({'message': 'Invalid role. Must be "editor" or "reader".'}), 400
 
-    category.collaborators.append(user_to_add)
+    collaborator = User.query.filter_by(email=collaborator_email).first()
+    if not collaborator:
+        return jsonify({'message': f'User with email {collaborator_email} not found'}), 404
+
+    # Check if the user is already a collaborator
+    if collaborator in category.collaborators:
+        return jsonify({'message': 'User is already a collaborator in this category'}), 409
+
+    category.collaborators.append(collaborator)
+    db.session.flush()
+
+    # Set the specific role for the new collaborator
+    stmt = db.update(category_collaborators).where(
+        db.and_(
+            category_collaborators.c.user_id == collaborator.id,
+            category_collaborators.c.category_id == category.id
+        )
+    ).values(role=role)
+    db.session.execute(stmt)
+
+    # --- START OF CHANGES ---
+    # 1. Ensure the category has a share token so the link will work.
+    if not category.share_token:
+        category.generate_share_token()
+        # The commit below will also save the new collaborator relationship
+    
     db.session.commit()
 
-    return jsonify({'message': f'User {user_to_add.username} added as a collaborator'}), 201
+    # 2. After adding the collaborator, send the notification email with the share token.
+    inviter = User.query.get(current_user_id)
+    send_collaborator_invitation_email(
+        recipient_email=collaborator.email,
+        inviter_username=inviter.username,
+        category_name=category.name,
+        share_token=category.share_token  # Pass the share token instead of the ID
+    )
+    # --- END OF CHANGES ---
+
+    return jsonify({'message': f'User {collaborator.username} added as a collaborator with role {role}'}), 200
 
 @category_bp.route('/<int:category_id>/collaborators/<int:user_id>', methods=['DELETE'])
 @jwt_required()

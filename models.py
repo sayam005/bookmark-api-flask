@@ -15,13 +15,17 @@ class User(db.Model):
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(128), nullable=False)
+    
+    # --- ENSURE THIS LINE EXISTS AND IS SAVED ---
+    is_verified = db.Column(db.Boolean, nullable=False, default=False)
+    
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # This is the relationship to bookmarks the user has personally created.
     bookmarks = db.relationship('Bookmark', backref='owner', lazy=True, cascade="all, delete-orphan")
 
-    # This is the relationship for collaboration.
+    # This is the new relationship for collaboration.
     shared_categories = db.relationship('Category', secondary=category_collaborators,
                                         back_populates='collaborators', lazy='dynamic')
 
