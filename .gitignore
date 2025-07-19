@@ -13,10 +13,6 @@ ENV/
 .env
 .env.*
 
-# Flask/Migrate/SQLAlchemy
-migrations/
-instance/
-
 # VS Code settings
 .vscode/
 
